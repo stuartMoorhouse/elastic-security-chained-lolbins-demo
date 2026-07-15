@@ -1,16 +1,24 @@
-### Password-spraying seed data — Elastic Security demo
+### Okta credential stuffing seed data — Elastic Security demo
 #
 # Requires an HTTP client that supports the {{$datetime iso8601 -N m}}
 # dynamic variable (VS Code "REST Client" extension, or IntelliJ/WebStorm's
-# built-in HTTP Client) — timestamps are computed at SEND time, not when this
-# file was written, so the data always lands inside the rule/preview window.
+# built-in HTTP Client) — timestamps are computed at SEND time so the data
+# always lands inside the rule/preview window.
 #
 # Fill in the variables below from Terraform outputs / shared/env.json:
 #   terraform -chdir=terraform output -raw elasticsearch_url
 #   terraform -chdir=terraform output -raw elastic_password
 #
-# Idempotent: run request #1 (delete-by-query) before every take, then #2
-# and #3 (bulk load), so re-runs never stack duplicate demo events.
+# Idempotent: send request #1 (delete-by-query) before every take, then
+# requests #2 and #3, so re-runs never stack duplicate demo events.
+#
+# Attack chain seeded for jsmith@example.com from the attacker IP:
+#   Stage 1 — 5 failed logins (INVALID_CREDENTIALS)
+#   Stage 2 — 2 MFA push failures (FACTOR_CHALLENGE_TIMEOUT)
+#   Stage 3 — 1 successful login
+#   Stage 4 — 1 privilege grant (post-compromise)
+# bjones and alee get Stage 1 only (no MFA, no success — rule stays quiet).
+# mwilson (benign IP) has 1 failed + 1 success — forgot password, no MFA failures.
 
 @esUrl = https://CHANGE-ME.es.CHANGE-ME.cloud.es.io
 @esUser = elastic
@@ -21,7 +29,7 @@
 
 
 ### 1. Clear any previous take's demo events for these two source IPs
-POST {{esUrl}}/logs-system.auth-default/_delete_by_query?refresh=true&conflicts=proceed
+POST {{esUrl}}/logs-okta.system-default/_delete_by_query?refresh=true&conflicts=proceed
 Authorization: Basic {{esUser}} {{esPassword}}
 Content-Type: application/json
 
@@ -34,51 +42,51 @@ Content-Type: application/json
 }
 
 
-### 2. Attacker IP — 8 distinct users, 14 failed attempts over the last ~14 minutes
-# Fires the rule: distinct_users (8) >= 5 AND failed_attempts (14) >= 10
-POST {{esUrl}}/logs-system.auth-default/_bulk?refresh=true
+### 2. Attacker IP — credential stuffing attack chain
+# bjones (Stage 1 only: 3 failed logins — no MFA, no success, rule stays quiet)
+# alee   (Stage 1 only: 2 failed logins — no MFA, no success, rule stays quiet)
+# jsmith (full chain: 5 failed → 2 MFA failures → success → privilege grant → FIRES rule)
+POST {{esUrl}}/logs-okta.system-default/_bulk?refresh=true
 Authorization: Basic {{esUser}} {{esPassword}}
 Content-Type: application/json
 
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -14 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"administrator"},"host":{"name":"auth-gateway-01"},"message":"Failed password for administrator from {{attackerIp}} port 51422 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -45 m}}","event":{"action":"user.session.start","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"FAILURE","reason":"INVALID_CREDENTIALS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"bjones@example.com","email":"bjones@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -13 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"admin"},"host":{"name":"auth-gateway-01"},"message":"Failed password for admin from {{attackerIp}} port 51423 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -43 m}}","event":{"action":"user.session.start","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"FAILURE","reason":"INVALID_CREDENTIALS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"bjones@example.com","email":"bjones@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -12 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"jsmith"},"host":{"name":"auth-gateway-01"},"message":"Failed password for jsmith from {{attackerIp}} port 51424 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -41 m}}","event":{"action":"user.session.start","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"FAILURE","reason":"INVALID_CREDENTIALS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"bjones@example.com","email":"bjones@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -11 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"mjones"},"host":{"name":"auth-gateway-01"},"message":"Failed password for mjones from {{attackerIp}} port 51425 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -38 m}}","event":{"action":"user.session.start","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"FAILURE","reason":"INVALID_CREDENTIALS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"alee@example.com","email":"alee@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -10 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"svc-backup"},"host":{"name":"auth-gateway-01"},"message":"Failed password for svc-backup from {{attackerIp}} port 51426 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -36 m}}","event":{"action":"user.session.start","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"FAILURE","reason":"INVALID_CREDENTIALS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"alee@example.com","email":"alee@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -9 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"helpdesk"},"host":{"name":"auth-gateway-01"},"message":"Failed password for helpdesk from {{attackerIp}} port 51427 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -30 m}}","event":{"action":"user.session.start","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"FAILURE","reason":"INVALID_CREDENTIALS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"jsmith@example.com","email":"jsmith@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -8 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"guest"},"host":{"name":"auth-gateway-01"},"message":"Failed password for guest from {{attackerIp}} port 51428 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -28 m}}","event":{"action":"user.session.start","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"FAILURE","reason":"INVALID_CREDENTIALS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"jsmith@example.com","email":"jsmith@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -7 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"test"},"host":{"name":"auth-gateway-01"},"message":"Failed password for test from {{attackerIp}} port 51429 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -26 m}}","event":{"action":"user.session.start","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"FAILURE","reason":"INVALID_CREDENTIALS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"jsmith@example.com","email":"jsmith@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -6 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"administrator"},"host":{"name":"auth-gateway-01"},"message":"Failed password for administrator from {{attackerIp}} port 51430 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -24 m}}","event":{"action":"user.session.start","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"FAILURE","reason":"INVALID_CREDENTIALS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"jsmith@example.com","email":"jsmith@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -5 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"admin"},"host":{"name":"auth-gateway-01"},"message":"Failed password for admin from {{attackerIp}} port 51431 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -22 m}}","event":{"action":"user.session.start","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"FAILURE","reason":"INVALID_CREDENTIALS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"jsmith@example.com","email":"jsmith@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -4 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"jsmith"},"host":{"name":"auth-gateway-01"},"message":"Failed password for jsmith from {{attackerIp}} port 51432 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -20 m}}","event":{"action":"user.authentication.auth_via_mfa","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.authentication.auth_via_mfa","outcome":{"result":"FAILURE","reason":"FACTOR_CHALLENGE_TIMEOUT"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"jsmith@example.com","email":"jsmith@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -3 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"mjones"},"host":{"name":"auth-gateway-01"},"message":"Failed password for mjones from {{attackerIp}} port 51433 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -18 m}}","event":{"action":"user.authentication.auth_via_mfa","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.authentication.auth_via_mfa","outcome":{"result":"FAILURE","reason":"FACTOR_CHALLENGE_TIMEOUT"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"jsmith@example.com","email":"jsmith@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -2 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"svc-backup"},"host":{"name":"auth-gateway-01"},"message":"Failed password for svc-backup from {{attackerIp}} port 51434 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -15 m}}","event":{"action":"user.session.start","outcome":"success","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"SUCCESS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"jsmith@example.com","email":"jsmith@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -1 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{attackerIp}}"},"user":{"name":"guest"},"host":{"name":"auth-gateway-01"},"message":"Failed password for guest from {{attackerIp}} port 51435 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -12 m}}","event":{"action":"user.account.privilege.grant","outcome":"success","dataset":"okta.system","category":["iam"],"kind":"event"},"okta":{"event_type":"user.account.privilege.grant","outcome":{"result":"SUCCESS"}},"source":{"ip":"{{attackerIp}}"},"client":{"ip":"{{attackerIp}}"},"user":{"name":"jsmith@example.com","email":"jsmith@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 
 
-### 3. Benign IP — 2 distinct users only, does NOT fire the rule
-# distinct_users (2) < 5, so the rule correctly stays quiet regardless of attempt count
-POST {{esUrl}}/logs-system.auth-default/_bulk?refresh=true
+### 3. Benign IP — mwilson forgets password, then logs in successfully
+# No MFA failures, no post-compromise actions → rule does not fire
+POST {{esUrl}}/logs-okta.system-default/_bulk?refresh=true
 Authorization: Basic {{esUser}} {{esPassword}}
 Content-Type: application/json
 
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -6 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{benignIp}}"},"user":{"name":"bob"},"host":{"name":"auth-gateway-01"},"message":"Failed password for bob from {{benignIp}} port 60001 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -10 m}}","event":{"action":"user.session.start","outcome":"failure","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"FAILURE","reason":"INVALID_CREDENTIALS"}},"source":{"ip":"{{benignIp}}"},"client":{"ip":"{{benignIp}}"},"user":{"name":"mwilson@example.com","email":"mwilson@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
 {"create":{}}
-{"@timestamp":"{{$datetime iso8601 -3 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{benignIp}}"},"user":{"name":"bob"},"host":{"name":"auth-gateway-01"},"message":"Failed password for bob from {{benignIp}} port 60002 ssh2"}
-{"create":{}}
-{"@timestamp":"{{$datetime iso8601 -2 m}}","event":{"category":["authentication"],"type":["denied"],"outcome":"failure","action":"ssh_login","dataset":"system.auth"},"source":{"ip":"{{benignIp}}"},"user":{"name":"alice"},"host":{"name":"auth-gateway-01"},"message":"Failed password for alice from {{benignIp}} port 60003 ssh2"}
+{"@timestamp":"{{$datetime iso8601 -8 m}}","event":{"action":"user.session.start","outcome":"success","dataset":"okta.system","category":["authentication"],"kind":"event"},"okta":{"event_type":"user.session.start","outcome":{"result":"SUCCESS"}},"source":{"ip":"{{benignIp}}"},"client":{"ip":"{{benignIp}}"},"user":{"name":"mwilson@example.com","email":"mwilson@example.com"},"data_stream":{"dataset":"okta.system","namespace":"default","type":"logs"}}
