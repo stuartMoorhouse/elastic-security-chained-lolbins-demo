@@ -1,0 +1,30 @@
+name: Runscript on Endpoint
+enabled: true
+description: Block Source IP
+triggers:
+  - type: alert
+
+inputs:
+  - name: endpoint_id
+    type: string
+    default: "3a2e1771-cdee-4381-8636-8bb21514f7e6"
+  - name: script_id
+    type: string
+    default: "f98f2055-5e77-4dd8-b286-edb5398ae8b7"
+
+steps:
+  - name: block_spray_source
+    type: kibana.request
+    with:
+      path: "/api/endpoint/action/run_script"
+      method: "POST"
+      body:
+        alert_ids:
+          - "{{ event.alerts[0]._id }}"
+        agent_type: "endpoint"
+        endpoint_ids:
+          - "{{ inputs.endpoint_id }}"
+        parameters:
+          scriptId: "{{ inputs.script_id }}"
+          scriptInput: "-SourceIP {{ event.alerts[0].source.ip }}"
+        comment: "Triggered by workflow '{{ workflow.name }}'"

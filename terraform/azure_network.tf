@@ -9,7 +9,7 @@ locals {
     division   = "field"
     org        = "sa"
     team       = "emea-north"
-    project    = "stuartmoorhouse"
+    project    = "marcantoineleclercq"
     keep-until = "2026-07-22"
   }
 }
