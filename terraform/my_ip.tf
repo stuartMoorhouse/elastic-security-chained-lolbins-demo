@@ -6,7 +6,7 @@
 data "http" "my_ip" {
   count = var.my_ip == "" ? 1 : 0
 
-  url = "https://ifconfig.me/ip"
+  url = "https://v4.ident.me/"
   request_headers = {
     "User-Agent" = "curl/8.0"
   }

@@ -1,0 +1,106 @@
+version: '1'
+name: Password Spray Response
+enabled: true
+description: >-
+  Alert-triggered workflow for the AI/ES|QL password-spraying detection rule.
+  Creates a case, attaches the triggering alert, adds an AI-generated analysis
+  comment, executes a runscript response action to block the source IP and
+  disable targeted accounts, and adds a final summary comment.
+triggers:
+  - type: alert
+
+steps:
+  # ── Step 1: Create a case for the password-spraying alert ──
+  - name: create_case
+    type: cases.createCase
+    with:
+      title: "Password Spray Detected — {{ event.rule.name }}"
+      description: >-
+        Automated case created by the Password Spray Response workflow.
+
+        **Rule:** {{ event.rule.name }}
+
+        **Rule ID:** {{ event.rule.id }}
+
+        **Triggered at:** {{ event.alerts[0]['@timestamp'] }}
+
+        This case tracks the investigation and response actions for a
+        password-spraying attack detected by the AI/ES|QL detection rule.
+      owner: securitySolution
+      severity: high
+      tags:
+        - password-spray
+        - automated-response
+        - workflow
+      settings:
+        syncAlerts: true
+
+  # ── Step 2: Attach the triggering alert(s) to the case ──
+  - name: attach_alerts
+    type: foreach
+    foreach: "{{ event.alerts | json }}"
+    steps:
+      - name: add_alert_to_case
+        type: cases.addAlerts
+        with:
+          case_id: "{{ steps.create_case.output.case.id }}"
+          alerts:
+            - alertId: "{{ foreach.item._id }}"
+              index: "{{ foreach.item._index }}"
+              rule:
+                id: "{{ event.rule.id }}"
+                name: "{{ event.rule.name }}"
+
+  # ── Step 3: AI-generated analysis comment ──
+  - name: ai_analysis
+    type: ai.prompt
+    connector-id: Anthropic-Claude-Sonnet-4-6
+    with:
+      prompt: >-
+        You are a security analyst. Analyze the following password-spraying
+        alert and produce a concise case comment for the security team.
+
+        **Alert data:**
+        {{ event.alerts | json }}
+
+        **Rule name:** {{ event.rule.name }}
+
+        Include in your analysis:
+        1. A summary of the password-spraying attack.
+        2. The list of targeted usernames (targeted_users) and the total
+           attempt count so the analyst sees the spray's blast radius.
+        3. The source IP address involved.
+        4. Severity assessment and recommended next steps.
+
+        Format the output as a readable case comment in Markdown.
+
+  - name: add_analysis_comment
+    type: cases.addComment
+    with:
+      case_id: "{{ steps.create_case.output.case.id }}"
+      comment: "### 🤖 AI Analysis\n\n{{ steps.ai_analysis.output.content }}"
+
+
+
+  - name: add_summary_comment
+    type: cases.addComment
+    with:
+      case_id: "{{ steps.create_case.output.case.id }}"
+      comment: >-
+        ### ✅ Automated Response Complete
+
+
+        The Password Spray Response workflow has completed all actions:
+
+
+        1. **Case created** — This case was automatically opened for rule
+        *{{ event.rule.name }}*.
+
+        2. **Alert attached** — The triggering alert has been linked to this case.
+
+        3. **AI analysis added** — An AI-generated summary of the attack
+        blast radius (targeted users and attempt count) was posted above.
+
+
+        No further automated actions are scheduled. Manual review is
+        recommended to confirm containment and assess lateral movement.
