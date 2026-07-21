@@ -1,0 +1,38 @@
+name: Weekly Report AI actions
+enabled: false
+description: This workflow generates a weekly report of all cases that contain the tag automated-response. It creates a new case with a summary of the number of automated cases found, as well as a list of all automated cases with their titles, IDs, statuses, and severities.
+triggers:
+  - type: scheduled
+    with:
+      every: 7d
+
+steps:
+  - name: find_automated_cases
+    type: cases.findCases
+    with:
+      tags: ["automated-response"]
+      sortField: "updatedAt"
+      sortOrder: "desc"
+      from: "now-7d"
+      perPage: 20
+
+  - name: create_case
+    type: cases.createCase
+    with:
+      title: "Weekly report — Automated response"
+      description: |-
+        Weekly report of all cases that contain the tag automated-response
+
+        **Triggered at:** {{ 'now' | date: '%Y-%m-%d %H:%M:%S' }}
+
+        **Automated cases found:** {{ steps.find_automated_cases.output.total }}
+        **Automated cases open:** {{ steps.find_automated_cases.output.count_open_cases }}
+        **Automated cases in progress:** {{ steps.find_automated_cases.output.count_in_progress_cases }}
+        **Automated cases closed:** {{ steps.find_automated_cases.output.count_closed_cases }}
+
+        {% for case in steps.find_automated_cases.output.cases %}- **{{ case.title }}** (ID: `{{ case.id }}`) — Status: {{ case.status }}, Severity: {{ case.severity }}
+        {% endfor %}
+      owner: securitySolution
+      severity: high
+      tags:
+        - report
