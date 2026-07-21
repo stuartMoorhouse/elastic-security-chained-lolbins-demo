@@ -44,14 +44,27 @@ resource "null_resource" "okta_integration" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      OKTA_INFO=$(curl -sf \
-        -u "${ec_deployment.main.elasticsearch_username}:${ec_deployment.main.elasticsearch_password}" \
-        -H "kbn-xsrf: true" \
-        "${ec_deployment.main.kibana.https_endpoint}/api/fleet/epm/packages/okta")
-      OKTA_VERSION=$(echo "$OKTA_INFO" | jq -r '.item.version // .response.version')
-      OKTA_STATUS=$(echo "$OKTA_INFO"  | jq -r '.item.status  // .response.status')
+      OKTA_TMP=$(mktemp)
+      trap "rm -f $OKTA_TMP" EXIT
+
+      # Wait for Kibana to be ready (up to 5 minutes) before installing the package.
+      for i in $(seq 1 30); do
+        if curl -sf --max-time 15 \
+          -u "${ec_deployment.main.elasticsearch_username}:${ec_deployment.main.elasticsearch_password}" \
+          -H "kbn-xsrf: true" \
+          "${ec_deployment.main.kibana.https_endpoint}/api/fleet/epm/packages/okta" \
+          -o "$OKTA_TMP"; then
+          break
+        fi
+        echo "Kibana not ready yet (attempt $i/30), retrying in 10s..."
+        sleep 10
+      done
+
+      OKTA_VERSION=$(jq -r '.item.version // .response.version' "$OKTA_TMP")
+      OKTA_STATUS=$(jq  -r '.item.status  // .response.status'  "$OKTA_TMP")
+
       if [ "$OKTA_STATUS" != "installed" ]; then
-        curl -sf \
+        curl -sf --max-time 30 \
           -u "${ec_deployment.main.elasticsearch_username}:${ec_deployment.main.elasticsearch_password}" \
           -H "kbn-xsrf: true" -H "Content-Type: application/json" \
           -X POST \

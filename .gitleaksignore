@@ -1,6 +1,6 @@
 # False positives: Terraform resource attribute interpolations, not hardcoded secrets.
 # ${ec_deployment.main.elasticsearch_username}:${ec_deployment.main.elasticsearch_password}
 # matches the curl-auth-user rule shape but contains no actual credential values.
-terraform/elastic_cloud.tf:curl-auth-user:47
-terraform/elastic_cloud.tf:curl-auth-user:54
-terraform/elastic_cloud.tf:curl-auth-user:73
+terraform/elastic_cloud.tf:curl-auth-user:52
+terraform/elastic_cloud.tf:curl-auth-user:67
+terraform/elastic_cloud.tf:curl-auth-user:86

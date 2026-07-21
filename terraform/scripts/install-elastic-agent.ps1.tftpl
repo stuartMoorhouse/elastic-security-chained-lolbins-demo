@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
 
 $version = "${elastic_version}"
 $fleetUrl = "${fleet_url}"
@@ -27,6 +28,6 @@ if (-not ($svc -and $svc.Status -eq "Running")) {
 $demoUser = "jsmith"
 if (-not (Get-LocalUser -Name $demoUser -ErrorAction SilentlyContinue)) {
     $pwd = ConvertTo-SecureString "DemoUser@2024!" -AsPlainText -Force
-    New-LocalUser -Name $demoUser -Password $pwd -FullName "John Smith (demo)" -Description "Demo account for Okta compromise runscript scenario"
+    New-LocalUser -Name $demoUser -Password $pwd -FullName "John Smith (demo)" -Description "Demo account for Okta compromise demo"
     Add-LocalGroupMember -Group "Users" -Member $demoUser
 }
