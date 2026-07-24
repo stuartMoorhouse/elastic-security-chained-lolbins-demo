@@ -249,29 +249,32 @@ log "Deleted ${DELETED} previous demo event(s)."
 # --------------------------------------------------------------------------
 step "Seeding attacker IP ${ATTACKER_IP}"
 
-# bjones: Stage 1 only — 3 failed logins, no further stages
-add "$(minutes_ago 45)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "bjones@example.com" "INVALID_CREDENTIALS"
-add "$(minutes_ago 43)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "bjones@example.com" "INVALID_CREDENTIALS"
-add "$(minutes_ago 41)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "bjones@example.com" "INVALID_CREDENTIALS"
+# bjones: Stage 1 only — 3 failed logins, no further stages (spray noise alongside jsmith)
+# Both event types so any reasonable AI query catches them
+add "$(minutes_ago 9)" "user.session.start"               "failure" "$ATTACKER_IP" "bjones@example.com" "INVALID_CREDENTIALS"
+add "$(minutes_ago 8)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "bjones@example.com" "INVALID_CREDENTIALS"
+add "$(minutes_ago 7)" "user.session.start"               "failure" "$ATTACKER_IP" "bjones@example.com" "INVALID_CREDENTIALS"
 
 # alee: Stage 1 only — 2 failed logins
-add "$(minutes_ago 38)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "alee@example.com" "INVALID_CREDENTIALS"
-add "$(minutes_ago 36)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "alee@example.com" "INVALID_CREDENTIALS"
+add "$(minutes_ago 9)" "user.session.start"               "failure" "$ATTACKER_IP" "alee@example.com" "INVALID_CREDENTIALS"
+add "$(minutes_ago 8)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "alee@example.com" "INVALID_CREDENTIALS"
 
 # jsmith: full attack chain — FIRES the rule
-# Stage 1: credential stuffing — 5 failed logins
-add "$(minutes_ago 30)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "jsmith@example.com" "INVALID_CREDENTIALS"
-add "$(minutes_ago 28)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "jsmith@example.com" "INVALID_CREDENTIALS"
-add "$(minutes_ago 26)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "jsmith@example.com" "INVALID_CREDENTIALS"
-add "$(minutes_ago 24)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "jsmith@example.com" "INVALID_CREDENTIALS"
-add "$(minutes_ago 22)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "jsmith@example.com" "INVALID_CREDENTIALS"
+# Stage 1: credential stuffing — both event types at every attempt so any AI query variant matches
+add "$(minutes_ago 9)" "user.session.start"               "failure" "$ATTACKER_IP" "jsmith@example.com" "INVALID_CREDENTIALS"
+add "$(minutes_ago 9)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "jsmith@example.com" "INVALID_CREDENTIALS"
+add "$(minutes_ago 7)" "user.session.start"               "failure" "$ATTACKER_IP" "jsmith@example.com" "INVALID_CREDENTIALS"
+add "$(minutes_ago 7)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "jsmith@example.com" "INVALID_CREDENTIALS"
+add "$(minutes_ago 5)" "user.session.start"               "failure" "$ATTACKER_IP" "jsmith@example.com" "INVALID_CREDENTIALS"
+add "$(minutes_ago 5)" "user.authentication.usernamepassword" "failure" "$ATTACKER_IP" "jsmith@example.com" "INVALID_CREDENTIALS"
 # Stage 2: MFA fatigue — 2 push failures
-add "$(minutes_ago 20)" "user.authentication.auth_via_mfa" "failure" "$ATTACKER_IP" "jsmith@example.com" "FACTOR_CHALLENGE_TIMEOUT"
-add "$(minutes_ago 18)" "user.authentication.auth_via_mfa" "failure" "$ATTACKER_IP" "jsmith@example.com" "FACTOR_CHALLENGE_TIMEOUT"
-# Stage 3: access — successful login
-add "$(minutes_ago 15)" "user.session.start" "success" "$ATTACKER_IP" "jsmith@example.com"
+add "$(minutes_ago 4)" "user.authentication.auth_via_mfa" "failure" "$ATTACKER_IP" "jsmith@example.com" "FACTOR_CHALLENGE_TIMEOUT"
+add "$(minutes_ago 3)" "user.authentication.auth_via_mfa" "failure" "$ATTACKER_IP" "jsmith@example.com" "FACTOR_CHALLENGE_TIMEOUT"
+# Stage 3: access — both event types so queries matching user.authentication.* also fire
+add "$(minutes_ago 2)" "user.session.start"               "success" "$ATTACKER_IP" "jsmith@example.com"
+add "$(minutes_ago 2)" "user.authentication.usernamepassword" "success" "$ATTACKER_IP" "jsmith@example.com"
 # Stage 4: post-compromise — privilege grant
-add "$(minutes_ago 12)" "user.account.privilege.grant" "success" "$ATTACKER_IP" "jsmith@example.com"
+add "$(minutes_ago 1)" "user.account.privilege.grant"     "success" "$ATTACKER_IP" "jsmith@example.com"
 
 ATTACKER_RESPONSE="$(es_post "/${DATA_STREAM}/_bulk?refresh=true" "${ATTACKER_BULK}")"
 if [[ "$(jq -r '.errors' <<<"${ATTACKER_RESPONSE}" 2>/dev/null || echo true)" != "false" ]]; then
@@ -289,7 +292,7 @@ step "Seeding benign IP ${BENIGN_IP} (forgot password, below threshold)"
 
 BENIGN_BULK=""
 BENIGN_BULK+="{\"create\":{}}"$'\n'
-BENIGN_BULK+="$(build_okta_event "$(minutes_ago 10)" "user.authentication.usernamepassword" "failure" "$BENIGN_IP" "mwilson@example.com" "INVALID_CREDENTIALS")"$'\n'
+BENIGN_BULK+="$(build_okta_event "$(minutes_ago 9)" "user.session.start" "failure" "$BENIGN_IP" "mwilson@example.com" "INVALID_CREDENTIALS")"$'\n'
 BENIGN_BULK+="{\"create\":{}}"$'\n'
 BENIGN_BULK+="$(build_okta_event "$(minutes_ago 8)" "user.session.start" "success" "$BENIGN_IP" "mwilson@example.com")"$'\n'
 
