@@ -281,10 +281,10 @@ UPLOAD_RESPONSE="$(curl -s \
     -F "name=Okta Compromise Remediation" \
     -F "file=@${REMEDIATION_SCRIPT}" \
     -F "fileType=script" \
-    -F "platform[]=windows" \
+    -F 'platform=["windows"]' \
     -F "description=Blocks the attacker source IP at the Windows Firewall and disables the compromised local Windows account. Triggered by the Okta credential stuffing detection rule." \
     -F "requiresInput=true" \
-    -F "tags[]=remediationAction" \
+    -F 'tags=["remediationAction"]' \
     "${KIBANA_URL%/}/api/endpoint/scripts_library" || true)"
 
 SCRIPT_ID="$(jq -r '.data.id // empty' <<<"${UPLOAD_RESPONSE}" 2>/dev/null || true)"
