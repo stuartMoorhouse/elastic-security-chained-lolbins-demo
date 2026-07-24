@@ -241,13 +241,70 @@ if [[ "${AGENT_HEALTHY}" != true ]]; then
 fi
 log "Elastic Agent is healthy on policy '${POLICY_NAME}'."
 
+# --------------------------------------------------------------------------
+# 8. Upload remediation script to Elastic Defend Script Library
+# --------------------------------------------------------------------------
+step "Uploading remediation script to Elastic Defend Script Library"
+
+REMEDIATION_SCRIPT="${REPO_ROOT}/demo/remediate-okta-compromise.ps1"
+STATE_DIR="${REPO_ROOT}/state"
+SCRIPT_ID_FILE="${STATE_DIR}/script-id"
+
+if [[ ! -f "${REMEDIATION_SCRIPT}" ]]; then
+    err "Remediation script not found at ${REMEDIATION_SCRIPT}."
+    exit 1
+fi
+
+# Idempotency: delete previous entry if we have a stored ID.
+if [[ -f "${SCRIPT_ID_FILE}" ]]; then
+    OLD_SCRIPT_ID="$(tr -d '[:space:]' < "${SCRIPT_ID_FILE}")"
+    if [[ -n "${OLD_SCRIPT_ID}" ]]; then
+        log "Deleting previous script library entry ${OLD_SCRIPT_ID}..."
+        DEL_CODE="$(curl -s -o /dev/null -w '%{http_code}' \
+            -u "${ELASTIC_USERNAME}:${ELASTIC_PASSWORD}" \
+            -H 'kbn-xsrf: true' \
+            -X DELETE \
+            "${KIBANA_URL%/}/api/endpoint/scripts_library/${OLD_SCRIPT_ID}" || true)"
+        if [[ "${DEL_CODE}" == "200" || "${DEL_CODE}" == "204" ]]; then
+            log "  Deleted."
+        else
+            log "  Could not delete (HTTP ${DEL_CODE}) — may already be gone."
+        fi
+    fi
+    rm -f "${SCRIPT_ID_FILE}"
+fi
+
+log "Uploading ${REMEDIATION_SCRIPT}..."
+UPLOAD_RESPONSE="$(curl -s \
+    -u "${ELASTIC_USERNAME}:${ELASTIC_PASSWORD}" \
+    -H 'kbn-xsrf: true' \
+    -F "name=Okta Compromise Remediation" \
+    -F "file=@${REMEDIATION_SCRIPT}" \
+    -F "fileType=script" \
+    -F "platform[]=windows" \
+    -F "description=Blocks the attacker source IP at the Windows Firewall and disables the compromised local Windows account. Triggered by the Okta credential stuffing detection rule." \
+    -F "requiresInput=true" \
+    -F "tags[]=remediationAction" \
+    "${KIBANA_URL%/}/api/endpoint/scripts_library" || true)"
+
+SCRIPT_ID="$(jq -r '.data.id // empty' <<<"${UPLOAD_RESPONSE}" 2>/dev/null || true)"
+
+if [[ -z "${SCRIPT_ID}" ]]; then
+    err "Failed to upload remediation script. Response: ${UPLOAD_RESPONSE}"
+    exit 1
+fi
+
+mkdir -p "${STATE_DIR}"
+echo "${SCRIPT_ID}" > "${SCRIPT_ID_FILE}"
+log "Script uploaded — ID: ${SCRIPT_ID} (saved to ${SCRIPT_ID_FILE})"
+
 TMP_ENV_JSON="$(mktemp)"
-jq '.config_ready = true' "${ENV_JSON}" > "${TMP_ENV_JSON}"
+jq --arg sid "${SCRIPT_ID}" '.config_ready = true | .script_id = $sid' "${ENV_JSON}" > "${TMP_ENV_JSON}"
 mv "${TMP_ENV_JSON}" "${ENV_JSON}"
 chmod 600 "${ENV_JSON}"
 
 # --------------------------------------------------------------------------
-# 8. Manual steps checklist
+# 9. Manual steps checklist
 # --------------------------------------------------------------------------
 step "Manual steps remaining (not automated by Terraform - see README.md)"
 
@@ -256,19 +313,16 @@ cat <<EOF
   1. Install Elastic Defend on the VM via Kibana Fleet (Fleet > Agents > select
      the agent > Add integration > Elastic Defend).
 
-  2. Upload demo/remediate-okta-compromise.ps1 to the Elastic Defend Script
-     library as a Remediation Action.
-
-  3. Author the AI/ES|QL detection rule using Agent Builder's AI rule creation.
+  2. Author the AI/ES|QL detection rule using Agent Builder's AI rule creation.
      Prompt and MITRE mapping reference: ${CONFIG_DIR}/ai-detection-rule-prompt.md
 
      When saving the rule, add the Workflow deployed by Terraform as a rule action.
-     Workflow ID: $(cat "${REPO_ROOT}/state/workflow-id" 2>/dev/null || echo "(see state/workflow-id after terraform apply)")
+     Workflow ID:  $(cat "${REPO_ROOT}/state/workflow-id" 2>/dev/null || echo "(see state/workflow-id after terraform apply)")
+     Script ID:    $(cat "${SCRIPT_ID_FILE}" 2>/dev/null || echo "(see state/script-id after configure.sh)")
 
-  4. Run demo/seed-okta-attack-data.sh to seed Okta telemetry and trigger the demo.
+  3. Run demo/seed-okta-attack-data.sh to seed Okta telemetry and trigger the demo.
 
-The Workflow (terraform/workflows/okta-credential-stuffing.yaml) is deployed
-automatically by terraform apply — no manual Workflow authoring needed.
+The Workflow and remediation Script are deployed automatically — no manual uploads needed.
 
 See README.md for the full demo flow.
 EOF

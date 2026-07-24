@@ -19,7 +19,7 @@ MITRE: T1110.004 (Credential Stuffing), T1078 (Valid Accounts), T1098 (Account M
 
 ## Setup
 
-Everything except the Script library upload (UI-only in Kibana) is handled by `terraform apply`.
+Everything is handled by `terraform apply` and `scripts/configure.sh`.
 
 ### First-time provisioning
 
@@ -38,11 +38,7 @@ terraform -chdir=terraform apply
 - Provisions the Azure Windows VM, VNet, NSG, public IP
 - Installs and enrolls the Elastic Agent on the VM
 - Deploys the Okta Credential Stuffing Response workflow to Kibana and writes its ID to `state/workflow-id`
-- Runs `scripts/configure.sh` — writes `shared/env.json`, creates the endpoint response-actions data stream, installs the Okta Fleet integration, and waits for the agent to show healthy in Fleet
-
-### One manual step
-
-Upload `demo/remediate-okta-compromise.ps1` to the **Script library** in Kibana: Security → Manage → Response actions library → Upload. There is no REST API for this — it must be done via the UI. Note the UUID assigned to the uploaded script; you will need it when creating the detection rule (as the `script_id` workflow input).
+- Runs `scripts/configure.sh` — writes `shared/env.json`, creates the endpoint response-actions data stream, installs the Okta Fleet integration, waits for the agent to show healthy in Fleet, and uploads `demo/remediate-okta-compromise.ps1` to the Script library (saving its UUID to `state/script-id`)
 
 ### Before each demo take
 
@@ -99,7 +95,7 @@ Review the generated ES|QL — it uses `COUNT_IF` in a single `STATS` pass, grou
 On the **Actions** tab, before saving: add the Workflow as a rule action.
 
 - **Workflow ID:** `cat state/workflow-id`
-- **`script_id` input:** the UUID assigned when you uploaded `remediate-okta-compromise.ps1` to the Script library (from the manual step above)
+- **`script_id` input:** `cat state/script-id` (uploaded automatically by `configure.sh`)
 - **`endpoint_id` input:** leave as-is — `terraform apply` pre-populated it with the enrolled agent's ID
 
 Click **Apply to creation** and enable the rule.
