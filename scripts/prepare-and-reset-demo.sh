@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# reset-demo.sh
+# prepare-and-reset-demo.sh
 #
-# Run on the operator's machine between demo takes. Uses the Kibana/
-# Elasticsearch APIs (credentials from ./shared/env.json, written by
-# configure.sh) to clean up the previous take's alerts and cases so the next
-# clean slate for the next take.
+# Run on the operator's machine before every demo take, including the first.
+# Seeds fresh Okta attack telemetry with current timestamps, and cleans up
+# the previous take's alerts and cases via the Kibana/Elasticsearch APIs
+# (credentials from ./shared/env.json, written by configure.sh).
 #
 # Remote remediation via Fleet's endpoint "runscript" response action is
 # intentionally NOT automated here: as of this writing that API surface is

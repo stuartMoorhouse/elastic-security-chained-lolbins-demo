@@ -40,13 +40,13 @@ terraform -chdir=terraform apply
 - Deploys the Okta Credential Stuffing Response workflow to Kibana and writes its ID to `state/workflow-id`
 - Runs `scripts/configure.sh` — writes `shared/env.json`, creates the endpoint response-actions data stream, installs the Okta Fleet integration, waits for the agent to show healthy in Fleet, and uploads `demo/remediate-okta-compromise.ps1` to the Script library (saving its UUID to `state/script-id`)
 
-### Before each demo take
+### Before each demo take (including the first)
 
 ```bash
-./scripts/reset-demo.sh
+./scripts/prepare-and-reset-demo.sh
 ```
 
-Closes open alerts and cases from the previous take and re-seeds fresh Okta attack telemetry with current timestamps.
+Seeds fresh Okta attack telemetry with current timestamps, and closes any open alerts and cases from the previous take. Run this before every demo, including the first time after `terraform apply`.
 
 ## Connecting to the VM
 
